@@ -29,7 +29,11 @@ export class ApiKeyGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const providedKey = request.headers['x-api-key'];
-    const validKeys = this.configService.get<string[]>('apiKeys') || [];
+    const rawKeys = this.configService.get<string>('API_KEYS') || '';
+    const validKeys = rawKeys
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
 
     if (!providedKey || !validKeys.includes(providedKey)) {
       throw new UnauthorizedException('Clé API manquante ou invalide');
