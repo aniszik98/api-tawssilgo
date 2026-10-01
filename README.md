@@ -190,21 +190,26 @@ tester directement sont disponibles sur `/docs` (Swagger).
 
 ## 7. Déploiement sur un VPS Hostinger
 
-L'API est déployée sur un **VPS Hostinger (Ubuntu, accès root via SSH)**. Sur un
-VPS on ne peut pas utiliser le deploy automatique de Render : c'est le serveur
-qui tire le code depuis GitHub, puis Nginx le met devant.
+L'API est déployée sur un **VPS Hostinger (Ubuntu, accès root via SSH)** avec
+**Docker + Nginx**. Sur un VPS il n'y a pas de déploiement automatique comme sur
+Render : c'est le serveur qui tire le code depuis GitHub, le lance dans un
+conteneur, et Nginx se place devant avec un certificat HTTPS.
 
 ```
-Internet ──HTTPS──> Nginx (443) ──http──> API NestJS (127.0.0.1:3000, PM2)
-                                            └──> PostgreSQL Supabase
+Internet ──HTTPS──> Nginx (443, sur l'hôte) ──http──> conteneur tawssilgo-api (127.0.0.1:3000)
+                                                          └──> PostgreSQL Supabase
 ```
+
+**La base de données reste sur Supabase** : il n'y a donc aucune donnée à
+migrer. Le VPS remplace uniquement l'exécution du process.
 
 ### 7.1 Prérequis dans hPanel
 
 1. **VPS avec un système d'exploitation** : hPanel → *VPS* → *Ajouter* → Ubuntu 22.04/24.04.
 2. **Accès root** : hPanel → *VPS* → *Serveur* → *Gérer* → *Paramètres root*.
-3. Un **sous-domaine** pointant vers l'IP du VPS : hPanel → *Sites* → *Ajouter*.
-   Exemple `api.tawssilgo.com`. C'est obligatoire pour obtenir un certificat HTTPS.
+3. Un **sous-domaine** pour l'API : `api.tawssilgo.com`. Les enregistrements DNS
+   se modifient à l'étape 7.8 ; le certificat exige que le sous-domaine pointe
+   déjà vers le VPS.
 
 ### 7.2 Connexion SSH
 
@@ -212,125 +217,259 @@ Internet ──HTTPS──> Nginx (443) ──http──> API NestJS (127.0.0.1:
 ssh root@<IP_DU_VPS>
 ```
 
-### 7.3 Installation de la pile serveur (une seule fois)
+### 7.3 Pile serveur (une seule fois)
 
 ```bash
 apt update && apt upgrade -y
 
-# Node.js 20 + npm
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
+# Docker (inclut le plugin "docker compose")
+curl -fsSL https://get.docker.com | sh
 
-# PM2 (gestion du process)
-npm install -g pm2
+# Nginx (reverse proxy), Certbot (HTTPS), pare-feu, outils
+apt install -y nginx certbot python3-certbot-nginx git curl ufw
 
-# Nginx + Certbot (reverse proxy + HTTPS)
-apt install -y nginx certbot python3-certbot-nginx
-
-# Outils utiles
-apt install -y git curl
+systemctl enable --now docker nginx
 ```
 
-### 7.4 Récupération du dépôt
+> Si `docker compose` est inconnu après cette étape :
+> `apt install -y docker-compose-v2`
+
+**VPS avec 1 Go de RAM uniquement** — le build NestJS peut se faire tuer par le
+OOM killer. Ajouter du swap avant toute autre chose :
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile
+mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+free -h   # vérifier que Swap n'est pas 0
+```
+
+Pare-feu — ouvrir **uniquement** 22, 80 et 443 :
+
+```bash
+ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
+ufw --force enable
+ufw status verbose
+```
+
+hPanel → *VPS* → *Pare-feu* a son propre filtre : y ouvrir aussi `22`, `80`, `443`.
+Le port `3000` ne doit jamais être ouvert, ni par ufw ni par hPanel.
+
+### 7.4 Dépôt et variables d'environnement
 
 ```bash
 mkdir -p /var/www/tawssilgo && cd /var/www/tawssilgo
 git clone https://github.com/aniszik98/api-tawssilgo.git .
 cp .env.example .env
-nano .env    # renseigner DB_*, API_KEYS — .env n'est jamais versionné
+nano .env
 chmod 600 .env
 ```
+
+| Variable | Rôle |
+|---|---|
+| `DB_HOST` | hôte PostgreSQL (Supabase : `*.pooler.supabase.com`) |
+| `DB_PORT` | `5432` |
+| `DB_USERNAME` | utilisateur de la base |
+| `DB_PASSWORD` | mot de passe |
+| `DB_DATABASE` | `postgres` |
+| `DB_SSL` | `true` chez Supabase |
+| `API_KEYS` | clés acceptées dans `x-api-key`, **séparées par des virgules** |
+| `PORT` | **laisser `3000`** |
+
+> **Piège Render** : Render impose `PORT=10000` sur ses services. Ne pas recopier
+> cette valeur depuis le dashboard Render — `docker-compose.yml` et la config
+> Nginx attendent `3000`.
+
+> `.env` est dans `.gitignore` **et** `.dockerignore` : il n'est ni versionné ni
+> copié dans l'image Docker. Les secrets sont injectés à l'exécution par
+> `env_file`.
 
 ### 7.5 Premier lancement
 
 ```bash
-npm ci
-npm run build
-mkdir -p logs
-pm2 start ecosystem.config.cjs
-pm2 save
-pm2 startup    # ← copier la commande affichée, elle rend PM2 persistant au reboot
+docker compose up -d --build
+docker compose logs -f --tail=50     # → "API démarrée sur http://localhost:3000/api/v1"
 ```
 
-Vérification :
+Puis les **trois tests de validation**, dans l'ordre. Le troisième est le plus
+important : c'est lui qui prouve que l'accès à PostgreSQL fonctionne.
 
 ```bash
+# 1. l'API répond (route publique, aucune clé requise)
 curl http://127.0.0.1:3000/api/v1/health
+#    attendu : {"status":"ok","timestamp":"..."}
+
+# 2. la protection par clé API est active (sans clé → refus)
+curl -i http://127.0.0.1:3000/api/v1/partenaires
+#    attendu : HTTP 401
+
+# 3. une clé valide accède bien aux données
+curl -H "x-api-key: <PREMIERE_CLE>" \
+  "http://127.0.0.1:3000/api/v1/partenaires?limit=1"
+#    attendu : HTTP 200 + JSON
 ```
 
-### 7.6 Nginx + HTTPS
+Si le test 3 renvoie `401` → `API_KEYS` mal recopiée (espaces parasites).
+S'il renvoie `500` ou si le conteneur redémarre en boucle → identifiants
+PostgreSQL à revérifier (voir 7.10).
 
-Remplacer `api.tawssilgo.com` par votre domaine, puis :
+Le conteneur embarque son propre `HEALTHCHECK` (appel à `/api/v1/health` toutes
+les 30 s) : `docker inspect --format '{{.State.Health.Status}}' tawssilgo-api`
+doit renvoyer `healthy`.
+
+### 7.6 Nginx
+
+Le fichier versionné suppose un certificat déjà généré, donc `nginx -t`
+échouerait au premier essai. Commencer par une version **HTTP seul** :
 
 ```bash
-cp /var/www/tawssilgo/deploy/nginx/tawssilgo-api.conf /etc/nginx/sites-available/tawssilgo-api.conf
+mkdir -p /var/www/html/.well-known/acme-challenge
+
+cat > /etc/nginx/sites-available/tawssilgo-api.conf <<'EOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.tawssilgo.com;
+
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+EOF
+
 ln -s /etc/nginx/sites-available/tawssilgo-api.conf /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
 
-Pour le certificat, retirer d'abord le bloc `listen 443` du fichier
-(Let's Encrypt a besoin du port 80 seul), puis :
+`rm /etc/nginx/sites-enabled/default` évite que le `server_name _` par défaut
+réponde à la place sur l'IP du VPS.
+
+### 7.7 Certificat HTTPS
+
+**Quand l'enregistrement DNS A pointe déjà vers le VPS** (voir 7.8) :
 
 ```bash
-certbot --nginx -d api.tawssilgo.com
-systemctl enable certbot.timer
+certbot certonly --webroot -w /var/www/html -d api.tawssilgo.com
+systemctl enable --now certbot.timer
 ```
 
-Après la validation de `certbot`, rejouer la commande `cp ... /etc/nginx/sites-available/`
-pour récupérer la version finale avec le bloc 443, puis `nginx -t && systemctl reload nginx`.
+Puis on bascule sur la config versionnée, qui ajoute le bloc `443` :
+
+```bash
+cp /var/www/tawssilgo/deploy/nginx/tawssilgo-api.conf /etc/nginx/sites-available/tawssilgo-api.conf
+nginx -t && systemctl reload nginx
+```
+
+Une fois le site servi en HTTPS, la redirection `301` du bloc `80` peut être
+remise en place (elle l'est déjà dans la config versionnée).
 
 L'API est disponible sur :
 
 - API : `https://api.tawssilgo.com/api/v1`
 - Swagger : `https://api.tawssilgo.com/docs`
+- Health : `https://api.tawssilgo.com/api/v1/health`
 
-### 7.7 Mises à jour ultérieures
+### 7.8 Bascule DNS
+
+1. hPanel → *Sites* → *DNS* → zone de `tawssilgo.com` → enregistrement **A**
+   pour `api` → IP du VPS.
+2. Si `api.tawssilgo.com` servait déjà Render via un domaine personnalisé,
+   **c'est la seule chose à changer** : les clients ne voient aucune différence.
+   S'ils appelaient `*.onrender.com`, mettre à jour l'URL de base côté client.
+3. Vérifier :
 
 ```bash
-cd /var/www/tawssilgo && bash deploy/deploy.sh
+curl https://api.tawssilgo.com/api/v1/health
+curl -H "x-api-key: <CLE>" https://api.tawssilgo.com/api/v1/partenaires?limit=1
 ```
 
-Ce script fait `git pull` + `npm ci` + `npm run build` + `pm2 reload`. Si la
-configuration PM2 n'a jamais été modifiée, un simple `git pull && npm run build
-&& pm2 reload ecosystem.config.cjs --update-env` suffit.
+4. Garder Render en secours 24–48 h, puis arrêter le service.
 
-> `--update-env` est important : il réinjecte les variables de `.env` dans le
-> process après un redémarrage.
+> Ne pas éteindre Render avant d'avoir eu un `200` sur le test authentifié :
+> c'est le seul contrôle qui prouve que la base est bien joignable depuis le
+> VPS.
 
-### 7.8 Alternative : Docker
-
-Un `Dockerfile` et un `docker-compose.yml` sont fournis si vous préférez
-containeriser l'API :
+### 7.9 Mises à jour et retour arrière
 
 ```bash
 cd /var/www/tawssilgo
-docker compose up -d --build
+bash deploy/deploy.sh
 ```
 
-Le port 3000 n'est publié que sur `127.0.0.1` : Nginx reste le seul point
-d'entrée public. Dans ce cas, remplacez l'étape 7.5 (PM2) par
-`systemctl enable docker` et oubliez PM2.
+Le script enchaîne `git pull --ff-only` → `docker compose build` → `up -d` →
+attente du healthcheck (60 s) → nettoyage des couches orphelines. Il refuse de
+continuer si `.env` est absent, et s'arrête avec les logs si le conteneur ne
+devient pas `healthy`.
 
-### 7.9 Commandes utiles
+Chaque build est **técuté avec le commit courant** (`tawssilgo-api:<sha>`), ce
+qui préserve le point de retour arrière.
+
+**Rollback** : revenir au dernier commit connu bon suffit — l'image correspondante
+est toujours sur le disque.
 
 ```bash
-pm2 logs tawssilgo-api          # logs en direct
-pm2 status                      # état des process
-pm2 monit                       # CPU / mémoire
-pm2 restart tawssilgo-api       # redémarrage manuel
-journalctl -u nginx -f          # logs Nginx
+git log --oneline -10             # repérer le sha précédent
+git checkout <sha-precedent>
+bash deploy/deploy.sh
 ```
 
-### 7.10 Sécurité — points de vigilance
+Les anciens tags s'accumulent : les lister et supprimer ceux qui ne servent plus,
+une fois le rollback devenu inutile.
 
-- **`.env` ne doit jamais être commité** : il est dans `.gitignore`, `chmod 600`
-  sur le serveur. Idem pour les variables du `docker-compose` (`env_file`, pas
-  `environment:` en clair).
-- **Les clés `API_KEYS` sont secrètes**. Elles ont été retirées des logs
-  applicatifs ; ne jamais les `console.log`.
-- **Ne jamais ouvrir le port 3000 publiquement** : Nginx (et le pare-feu) sont
-  les seuls à y accéder. Dans hPanel → *VPS* → *Pare-feu*, ouvrir uniquement
-  `22`, `80`, `443`.
-- **Les logs PM2** (`logs/*.log`) sont en dur sur le disque : les purger
-  régulièrement (`pm2 flush`) ou activer la rotation via
-  `pm2 install pm2-logrotate`.
+```bash
+docker images tawssilgo-api --format '{{.Repository}}:{{.Tag}}  {{.CreatedAt}}'
+docker rmi tawssilgo-api:<ancien-sha>
+```
+
+### 7.10 Diagnostic
+
+| Symptôme | Cause probable | Vérification |
+|---|---|---|
+| Conteneur en boucle de redémarrage | identifiants PostgreSQL | `docker compose logs --tail=50` → `Unable to connect to the database` |
+| `unhealthy` alors que les logs sont vides | API qui n'écoute pas encore | laisser 20 s (`start-period`) puis `docker inspect --format '{{.State.Health.Status}}' tawssilgo-api` |
+| `401` sur un appel authentifié | `API_KEYS` mal recopiée | pas d'espace autour des virgules |
+| `502` depuis Nginx | API down ou port modifié | `ss -tlnp \| grep 3000` |
+| `502` pendant le build | build OOM | vérifier `free -h`, swap de l'étape 7.3 |
+| Disque plein | logs Docker / images anciennes | `docker system df`, `docker images -f dangling=true -q \| xargs -r docker rmi` |
+
+Commandes utiles :
+
+```bash
+docker compose ps                 # état + health
+docker compose logs -f --tail=100 # logs en direct
+docker compose restart api        # redémarrage seul
+docker stats --no-stream          # RAM/CPU du conteneur
+journalctl -u nginx -f            # logs Nginx
+```
+
+### 7.11 Sécurité
+
+- **`.env` jamais commité** : il est dans `.gitignore` et `.dockerignore`, et en
+  `chmod 600` sur le serveur. Les secrets arrivent par `env_file`, jamais dans
+  l'image.
+- **`API_KEYS` est un secret** : ne jamais le `console.log` côté API, ni le
+  printer dans un ticket ou un log de Nginx.
+- **Le port 3000 ne s'ouvre jamais publiquement** : Nginx et le pare-feu sont les
+  seuls à y accéder.
+- **Une seule route publique** : `/api/v1/health`, tout le reste passe par
+  `x-api-key`. Ajouter une route publique exige un `@Public()` explicite.
+- **Certificat** : `certbot.timer` renouvelle automatiquement ; vérifier avec
+  `certbot renew --dry-run`.
+
+### 7.12 Variante sans Docker (PM2)
+
+`ecosystem.config.cjs` est fourni pour qui préfère gérer le process sans
+conteneur : `npm ci && npm run build && pm2 reload ecosystem.config.cjs
+--update-env`. À noter que cette config est en `instances: 'max'` + `cluster`,
+donc un process Node par cœur — **plus gourmand en RAM** que le conteneur unique,
+et PM2 demande en plus `pm2 startup` pour survivre au reboot. Sur un VPS 2 Go,
+Docker reste le meilleur choix.

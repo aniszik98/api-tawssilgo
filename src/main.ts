@@ -8,6 +8,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors();
+  // Permet a NestJS de stopper proprement le process sur SIGTERM, ce que
+  // Docker envoie lors d'un `compose up -d`. Sans ca, les requetes en vol
+  // sont coupees net a chaque deploiement.
+  app.enableShutdownHooks();
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // supprime les champs non déclarés dans les DTO

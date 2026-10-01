@@ -1,9 +1,20 @@
 services:
   api:
     build: .
+    image: tawssilgo-api:latest
     container_name: tawssilgo-api
     restart: unless-stopped
     env_file:
       - .env
+    # Le port n'est publié que sur la boucle locale : Nginx reste le seul
+    # point d'entrée public. Ne jamais passer en "3000:3000".
     ports:
       - '127.0.0.1:3000:3000'
+    # Sans limite, json-file grossit jusqu'a saturer le disque du VPS.
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    # Laisse le temps a NestJS de finir les requetes en cours avant le kill.
+    stop_grace_period: 30s
