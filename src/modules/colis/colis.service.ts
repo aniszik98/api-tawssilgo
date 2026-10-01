@@ -11,7 +11,7 @@ import { ColisHistorique } from './colis-historique.entity';
 import { CreateColisDto } from './dto/create-colis.dto';
 import { UpdateColisDto } from './dto/update-colis.dto';
 import { ChangeStatutColisDto } from './dto/change-statut-colis.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ColisQueryDto } from './dto/colis-query.dto';
 
 // Transitions de statut autorisées. Toute autre transition est rejetée,
 // pour éviter des incohérences métier (ex: repasser "livrée" à "en_attente").
@@ -64,7 +64,7 @@ export class ColisService {
     return saved;
   }
 
-  async findAll(query: PaginationQueryDto & { statut?: string }) {
+  async findAll(query: ColisQueryDto) {
     const { page, limit, search, statut } = query;
     const where: any = {};
     if (statut) where.statut = statut;

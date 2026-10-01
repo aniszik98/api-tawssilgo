@@ -5,7 +5,7 @@ import { Reclamation, ReclamationStatut } from './reclamation.entity';
 import { ReclamationHistorique } from './reclamation-historique.entity';
 import { CreateReclamationDto } from './dto/create-reclamation.dto';
 import { ChangeStatutReclamationDto } from './dto/change-statut-reclamation.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ReclamationQueryDto } from './dto/reclamation-query.dto';
 
 @Injectable()
 export class ReclamationsService {
@@ -38,7 +38,7 @@ export class ReclamationsService {
     return saved;
   }
 
-  async findAll(query: PaginationQueryDto & { statut?: string; partenaireId?: string }) {
+  async findAll(query: ReclamationQueryDto) {
     const { page, limit, statut, partenaireId } = query;
     const where: any = {};
     if (statut) where.statut = statut;

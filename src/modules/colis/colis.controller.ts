@@ -12,7 +12,7 @@ import { ColisService } from './colis.service';
 import { CreateColisDto } from './dto/create-colis.dto';
 import { UpdateColisDto } from './dto/update-colis.dto';
 import { ChangeStatutColisDto } from './dto/change-statut-colis.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ColisQueryDto } from './dto/colis-query.dto';
 
 @ApiTags('Colis')
 @ApiSecurity('api-key')
@@ -26,7 +26,7 @@ export class ColisController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { statut?: string }) {
+  findAll(@Query() query: ColisQueryDto) {
     return this.service.findAll(query);
   }
 

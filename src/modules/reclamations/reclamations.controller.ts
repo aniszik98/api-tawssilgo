@@ -3,7 +3,7 @@ import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { ReclamationsService } from './reclamations.service';
 import { CreateReclamationDto } from './dto/create-reclamation.dto';
 import { ChangeStatutReclamationDto } from './dto/change-statut-reclamation.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ReclamationQueryDto } from './dto/reclamation-query.dto';
 
 @ApiTags('Réclamations')
 @ApiSecurity('api-key')
@@ -17,7 +17,7 @@ export class ReclamationsController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { statut?: string; partenaireId?: string }) {
+  findAll(@Query() query: ReclamationQueryDto) {
     return this.service.findAll(query);
   }
 

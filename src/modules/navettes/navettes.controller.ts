@@ -3,7 +3,7 @@ import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { NavettesService } from './navettes.service';
 import { CreateNavetteDto } from './dto/create-navette.dto';
 import { EnvoyerNavetteDto } from './dto/envoyer-navette.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { NavetteQueryDto } from './dto/navette-query.dto';
 
 @ApiTags('Navettes')
 @ApiSecurity('api-key')
@@ -17,7 +17,7 @@ export class NavettesController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { statut?: string }) {
+  findAll(@Query() query: NavetteQueryDto) {
     return this.service.findAll(query);
   }
 

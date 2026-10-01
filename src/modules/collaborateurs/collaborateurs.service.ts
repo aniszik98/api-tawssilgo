@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Collaborateur } from './collaborateur.entity';
 import { CreateCollaborateurDto } from './dto/create-collaborateur.dto';
 import { UpdateCollaborateurDto } from './dto/update-collaborateur.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { CollaborateurQueryDto } from './dto/collaborateur-query.dto';
 
 @Injectable()
 export class CollaborateursService {
@@ -17,7 +17,7 @@ export class CollaborateursService {
     return this.repo.save(this.repo.create(dto));
   }
 
-  async findAll(query: PaginationQueryDto & { partenaireId?: string }) {
+  async findAll(query: CollaborateurQueryDto) {
     const { page, limit, partenaireId } = query;
     const [data, total] = await this.repo.findAndCount({
       where: partenaireId ? { partenaireId } : {},

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ColisFlux } from './colis-flux.entity';
 import { CreateColisFluxDto } from './dto/create-colis-flux.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ColisFluxQueryDto } from './dto/colis-flux-query.dto';
 
 @Injectable()
 export class ColisFluxService {
@@ -16,7 +16,7 @@ export class ColisFluxService {
     return this.repo.save(this.repo.create(dto));
   }
 
-  async findAll(query: PaginationQueryDto & { partenaireId?: string; colisId?: string }) {
+  async findAll(query: ColisFluxQueryDto) {
     const { page, limit, partenaireId, colisId } = query;
     const where: any = {};
     if (partenaireId) where.partenaireId = partenaireId;

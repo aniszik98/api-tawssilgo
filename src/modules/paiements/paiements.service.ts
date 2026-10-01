@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Paiement, PaiementStatut } from './paiement.entity';
 import { CreatePaiementDto } from './dto/create-paiement.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { PaiementQueryDto } from './dto/paiement-query.dto';
 import { PartenairesService } from '../partenaires/partenaires.service';
 
 @Injectable()
@@ -18,7 +18,7 @@ export class PaiementsService {
     return this.repo.save(this.repo.create(dto));
   }
 
-  async findAll(query: PaginationQueryDto & { partenaireId?: string; statut?: string }) {
+  async findAll(query: PaiementQueryDto) {
     const { page, limit, partenaireId, statut } = query;
     const where: any = {};
     if (partenaireId) where.partenaireId = partenaireId;

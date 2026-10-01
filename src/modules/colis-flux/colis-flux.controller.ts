@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { ColisFluxService } from './colis-flux.service';
 import { CreateColisFluxDto } from './dto/create-colis-flux.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ColisFluxQueryDto } from './dto/colis-flux-query.dto';
 
 @ApiTags('Colis - Flux physique')
 @ApiSecurity('api-key')
@@ -16,7 +16,7 @@ export class ColisFluxController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { partenaireId?: string; colisId?: string }) {
+  findAll(@Query() query: ColisFluxQueryDto) {
     return this.service.findAll(query);
   }
 }

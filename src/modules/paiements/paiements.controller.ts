@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { PaiementsService } from './paiements.service';
 import { CreatePaiementDto } from './dto/create-paiement.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { PaiementQueryDto } from './dto/paiement-query.dto';
 
 @ApiTags('Paiements')
 @ApiSecurity('api-key')
@@ -16,7 +16,7 @@ export class PaiementsController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { partenaireId?: string; statut?: string }) {
+  findAll(@Query() query: PaiementQueryDto) {
     return this.service.findAll(query);
   }
 

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { NotificationQueryDto } from './dto/notification-query.dto';
 
 @ApiTags('Notifications')
 @ApiSecurity('api-key')
@@ -16,7 +16,7 @@ export class NotificationsController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { partenaireId?: string; forAdmin?: boolean }) {
+  findAll(@Query() query: NotificationQueryDto) {
     return this.service.findAll(query);
   }
 

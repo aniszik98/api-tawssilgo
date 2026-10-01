@@ -12,7 +12,7 @@ import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { CollaborateursService } from './collaborateurs.service';
 import { CreateCollaborateurDto } from './dto/create-collaborateur.dto';
 import { UpdateCollaborateurDto } from './dto/update-collaborateur.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { CollaborateurQueryDto } from './dto/collaborateur-query.dto';
 
 @ApiTags('Collaborateurs')
 @ApiSecurity('api-key')
@@ -26,7 +26,7 @@ export class CollaborateursController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto & { partenaireId?: string }) {
+  findAll(@Query() query: CollaborateurQueryDto) {
     return this.service.findAll(query);
   }
 

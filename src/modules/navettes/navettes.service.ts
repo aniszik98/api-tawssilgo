@@ -6,7 +6,7 @@ import { NavetteHistorique } from './navette-historique.entity';
 import { Colis } from '../colis/colis.entity';
 import { CreateNavetteDto } from './dto/create-navette.dto';
 import { EnvoyerNavetteDto } from './dto/envoyer-navette.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { NavetteQueryDto } from './dto/navette-query.dto';
 
 @Injectable()
 export class NavettesService {
@@ -23,7 +23,7 @@ export class NavettesService {
     return this.repo.save(this.repo.create(dto));
   }
 
-  async findAll(query: PaginationQueryDto & { statut?: string }) {
+  async findAll(query: NavetteQueryDto) {
     const { page, limit, statut } = query;
     const [data, total] = await this.repo.findAndCount({
       where: statut ? { statut } : {},

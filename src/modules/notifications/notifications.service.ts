@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './notification.entity';
 import { CreateNotificationDto } from './dto/create-notification.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { NotificationQueryDto } from './dto/notification-query.dto';
 
 @Injectable()
 export class NotificationsService {
@@ -16,7 +16,7 @@ export class NotificationsService {
     return this.repo.save(this.repo.create(dto));
   }
 
-  async findAll(query: PaginationQueryDto & { partenaireId?: string; forAdmin?: boolean }) {
+  async findAll(query: NotificationQueryDto) {
     const { page, limit, partenaireId, forAdmin } = query;
     const where: any = {};
     if (partenaireId) where.partenaireId = partenaireId;
