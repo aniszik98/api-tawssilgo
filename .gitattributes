@@ -1,0 +1,13 @@
+# Forcer LF sur tous les fichiers texte : les line breaks Windows (CRLF)
+# cassent deploy/deploy.sh sur le VPS Ubuntu.
+* text=auto eol=lf
+
+# Fichiers explicitement textuels
+*.ts      text eol=lf
+*.js      text eol=lf
+*.cjs     text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.sh      text eol=lf
+Dockerfile text eol=lf

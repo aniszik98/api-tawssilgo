@@ -31,8 +31,6 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: () => {
-        console.log('DB_USERNAME from process.env:', process.env.DB_USERNAME);
-        console.log('DB_HOST from process.env:', process.env.DB_HOST);
         return {
           type: 'postgres',
           host: process.env.DB_HOST,

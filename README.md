@@ -187,3 +187,150 @@ curl http://localhost:3000/api/v1/colis/{id}/historique \
 
 Tous les endpoints, leurs schémas de requête/réponse et la possibilité de les
 tester directement sont disponibles sur `/docs` (Swagger).
+
+## 7. Déploiement sur un VPS Hostinger
+
+L'API est déployée sur un **VPS Hostinger (Ubuntu, accès root via SSH)**. Sur un
+VPS on ne peut pas utiliser le deploy automatique de Render : c'est le serveur
+qui tire le code depuis GitHub, puis Nginx le met devant.
+
+```
+Internet ──HTTPS──> Nginx (443) ──http──> API NestJS (127.0.0.1:3000, PM2)
+                                            └──> PostgreSQL Supabase
+```
+
+### 7.1 Prérequis dans hPanel
+
+1. **VPS avec un système d'exploitation** : hPanel → *VPS* → *Ajouter* → Ubuntu 22.04/24.04.
+2. **Accès root** : hPanel → *VPS* → *Serveur* → *Gérer* → *Paramètres root*.
+3. Un **sous-domaine** pointant vers l'IP du VPS : hPanel → *Sites* → *Ajouter*.
+   Exemple `api.tawssilgo.com`. C'est obligatoire pour obtenir un certificat HTTPS.
+
+### 7.2 Connexion SSH
+
+```bash
+ssh root@<IP_DU_VPS>
+```
+
+### 7.3 Installation de la pile serveur (une seule fois)
+
+```bash
+apt update && apt upgrade -y
+
+# Node.js 20 + npm
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+
+# PM2 (gestion du process)
+npm install -g pm2
+
+# Nginx + Certbot (reverse proxy + HTTPS)
+apt install -y nginx certbot python3-certbot-nginx
+
+# Outils utiles
+apt install -y git curl
+```
+
+### 7.4 Récupération du dépôt
+
+```bash
+mkdir -p /var/www/tawssilgo && cd /var/www/tawssilgo
+git clone https://github.com/aniszik98/api-tawssilgo.git .
+cp .env.example .env
+nano .env    # renseigner DB_*, API_KEYS — .env n'est jamais versionné
+chmod 600 .env
+```
+
+### 7.5 Premier lancement
+
+```bash
+npm ci
+npm run build
+mkdir -p logs
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 startup    # ← copier la commande affichée, elle rend PM2 persistant au reboot
+```
+
+Vérification :
+
+```bash
+curl http://127.0.0.1:3000/api/v1/health
+```
+
+### 7.6 Nginx + HTTPS
+
+Remplacer `api.tawssilgo.com` par votre domaine, puis :
+
+```bash
+cp /var/www/tawssilgo/deploy/nginx/tawssilgo-api.conf /etc/nginx/sites-available/tawssilgo-api.conf
+ln -s /etc/nginx/sites-available/tawssilgo-api.conf /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+```
+
+Pour le certificat, retirer d'abord le bloc `listen 443` du fichier
+(Let's Encrypt a besoin du port 80 seul), puis :
+
+```bash
+certbot --nginx -d api.tawssilgo.com
+systemctl enable certbot.timer
+```
+
+Après la validation de `certbot`, rejouer la commande `cp ... /etc/nginx/sites-available/`
+pour récupérer la version finale avec le bloc 443, puis `nginx -t && systemctl reload nginx`.
+
+L'API est disponible sur :
+
+- API : `https://api.tawssilgo.com/api/v1`
+- Swagger : `https://api.tawssilgo.com/docs`
+
+### 7.7 Mises à jour ultérieures
+
+```bash
+cd /var/www/tawssilgo && bash deploy/deploy.sh
+```
+
+Ce script fait `git pull` + `npm ci` + `npm run build` + `pm2 reload`. Si la
+configuration PM2 n'a jamais été modifiée, un simple `git pull && npm run build
+&& pm2 reload ecosystem.config.cjs --update-env` suffit.
+
+> `--update-env` est important : il réinjecte les variables de `.env` dans le
+> process après un redémarrage.
+
+### 7.8 Alternative : Docker
+
+Un `Dockerfile` et un `docker-compose.yml` sont fournis si vous préférez
+containeriser l'API :
+
+```bash
+cd /var/www/tawssilgo
+docker compose up -d --build
+```
+
+Le port 3000 n'est publié que sur `127.0.0.1` : Nginx reste le seul point
+d'entrée public. Dans ce cas, remplacez l'étape 7.5 (PM2) par
+`systemctl enable docker` et oubliez PM2.
+
+### 7.9 Commandes utiles
+
+```bash
+pm2 logs tawssilgo-api          # logs en direct
+pm2 status                      # état des process
+pm2 monit                       # CPU / mémoire
+pm2 restart tawssilgo-api       # redémarrage manuel
+journalctl -u nginx -f          # logs Nginx
+```
+
+### 7.10 Sécurité — points de vigilance
+
+- **`.env` ne doit jamais être commité** : il est dans `.gitignore`, `chmod 600`
+  sur le serveur. Idem pour les variables du `docker-compose` (`env_file`, pas
+  `environment:` en clair).
+- **Les clés `API_KEYS` sont secrètes**. Elles ont été retirées des logs
+  applicatifs ; ne jamais les `console.log`.
+- **Ne jamais ouvrir le port 3000 publiquement** : Nginx (et le pare-feu) sont
+  les seuls à y accéder. Dans hPanel → *VPS* → *Pare-feu*, ouvrir uniquement
+  `22`, `80`, `443`.
+- **Les logs PM2** (`logs/*.log`) sont en dur sur le disque : les purger
+  régulièrement (`pm2 flush`) ou activer la rotation via
+  `pm2 install pm2-logrotate`.

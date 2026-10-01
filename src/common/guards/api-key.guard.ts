@@ -35,14 +35,6 @@ export class ApiKeyGuard implements CanActivate {
       .map((k) => k.trim())
       .filter((k) => k.length > 0);
 
-    // DEBUG TEMPORAIRE - à retirer après diagnostic
-    console.log('=== DEBUG API KEY ===');
-    console.log('rawKeys env:', JSON.stringify(rawKeys));
-    console.log('validKeys array:', JSON.stringify(validKeys));
-    console.log('providedKey header:', JSON.stringify(providedKey));
-    console.log('match found:', validKeys.includes(providedKey));
-    console.log('======================');
-
     if (!providedKey || !validKeys.includes(providedKey)) {
       throw new UnauthorizedException('Clé API manquante ou invalide');
     }
