@@ -22,4 +22,12 @@ export class PaginationQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Ne renvoyer que les éléments modifiés à partir de cette date (ISO 8601), pour la synchronisation',
+  })
+  @IsOptional()
+  @IsString()
+  updatedSince?: string;
 }

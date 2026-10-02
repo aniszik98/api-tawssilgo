@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, MoreThan, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Colis, ColisStatut } from './colis.entity';
 import { ColisHistorique } from './colis-historique.entity';
@@ -12,6 +12,8 @@ import { CreateColisDto } from './dto/create-colis.dto';
 import { UpdateColisDto } from './dto/update-colis.dto';
 import { ChangeStatutColisDto } from './dto/change-statut-colis.dto';
 import { ColisQueryDto } from './dto/colis-query.dto';
+import { LaravelSyncService } from '../laravel-sync/laravel-sync.service';
+import { parseSince } from '../../common/utils/parse-since';
 
 // Transitions de statut autorisées. Toute autre transition est rejetée,
 // pour éviter des incohérences métier (ex: repasser "livrée" à "en_attente").
@@ -42,6 +44,7 @@ export class ColisService {
     private readonly colisRepo: Repository<Colis>,
     @InjectRepository(ColisHistorique)
     private readonly historiqueRepo: Repository<ColisHistorique>,
+    private readonly sync: LaravelSyncService,
   ) {}
 
   async create(dto: CreateColisDto): Promise<Colis> {
@@ -65,10 +68,12 @@ export class ColisService {
   }
 
   async findAll(query: ColisQueryDto) {
-    const { page, limit, search, statut } = query;
+    const { page, limit, search, statut, updatedSince } = query;
     const where: any = {};
     if (statut) where.statut = statut;
     if (search) where.codeSuivi = ILike(`%${search}%`);
+    const since = parseSince(updatedSince);
+    if (since) where.updatedAt = MoreThan(since);
 
     const [data, total] = await this.colisRepo.findAndCount({
       where,
@@ -106,17 +111,21 @@ export class ColisService {
    * autre, en validant la transition, en timestampant l'étape, et en gardant
    * une trace complète dans colis_historique.
    */
-  async changerStatut(id: string, dto: ChangeStatutColisDto): Promise<Colis> {
+  async changerStatut(
+    id: string,
+    dto: ChangeStatutColisDto,
+    isSync = false,
+  ): Promise<Colis> {
     const colis = await this.findOne(id);
     const transitionsPossibles = TRANSITIONS_AUTORISEES[colis.statut] || [];
 
-    if (!transitionsPossibles.includes(dto.statut)) {
+    if (!isSync && !transitionsPossibles.includes(dto.statut)) {
       throw new BadRequestException(
         `Transition invalide : ${colis.statut} → ${dto.statut}. Transitions possibles : ${transitionsPossibles.join(', ') || 'aucune'}`,
       );
     }
 
-    if (dto.statut === ColisStatut.RETOUR && !dto.retourMotif) {
+    if (!isSync && dto.statut === ColisStatut.RETOUR && !dto.retourMotif) {
       throw new BadRequestException('Le motif de retour est obligatoire pour ce statut');
     }
 
@@ -129,7 +138,7 @@ export class ColisService {
     }
 
     if (dto.statut === ColisStatut.RETOUR) {
-      colis.retourMotif = dto.retourMotif!;
+      colis.retourMotif = dto.retourMotif || '';
       colis.retourAt = new Date();
       colis.retourTentatives = (colis.retourTentatives || 0) + 1;
     }
@@ -151,6 +160,10 @@ export class ColisService {
         commentaire: dto.commentaire || '',
       }),
     );
+
+    if (!isSync) {
+      void this.sync.notifyColisStatut(colis, ancienStatut);
+    }
 
     return colis;
   }

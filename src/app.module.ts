@@ -21,6 +21,7 @@ import { TarifsModule } from './modules/tarifs/tarifs.module';
 import { VersementsModule } from './modules/versements/versements.module';
 import { MessagerieModule } from './modules/messagerie/messagerie.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { LaravelSyncModule } from './modules/laravel-sync/laravel-sync.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
     VersementsModule,
     MessagerieModule,
     IntegrationsModule,
+    LaravelSyncModule,
   ],
   providers: [
     {

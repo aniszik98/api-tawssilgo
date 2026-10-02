@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import { Navette } from './navette.entity';
 import { NavetteHistorique } from './navette-historique.entity';
 import { Colis } from '../colis/colis.entity';
 import { CreateNavetteDto } from './dto/create-navette.dto';
 import { EnvoyerNavetteDto } from './dto/envoyer-navette.dto';
 import { NavetteQueryDto } from './dto/navette-query.dto';
+import { LaravelSyncService } from '../laravel-sync/laravel-sync.service';
+import { parseSince } from '../../common/utils/parse-since';
 
 @Injectable()
 export class NavettesService {
@@ -17,6 +19,7 @@ export class NavettesService {
     private readonly historiqueRepo: Repository<NavetteHistorique>,
     @InjectRepository(Colis)
     private readonly colisRepo: Repository<Colis>,
+    private readonly sync: LaravelSyncService,
   ) {}
 
   create(dto: CreateNavetteDto) {
@@ -24,9 +27,12 @@ export class NavettesService {
   }
 
   async findAll(query: NavetteQueryDto) {
-    const { page, limit, statut } = query;
+    const { page, limit, statut, updatedSince } = query;
+    const where: any = statut ? { statut } : {};
+    const since = parseSince(updatedSince);
+    if (since) where.updatedAt = MoreThan(since);
     const [data, total] = await this.repo.findAndCount({
-      where: statut ? { statut } : {},
+      where,
       relations: ['conducteur'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -46,7 +52,11 @@ export class NavettesService {
    * navette, marque la navette "en_route", et crée une ligne d'historique
    * conservant la liste exacte des colis envoyés à cet instant.
    */
-  async envoyer(id: string, dto: EnvoyerNavetteDto): Promise<NavetteHistorique> {
+  async envoyer(
+    id: string,
+    dto: EnvoyerNavetteDto,
+    isSync = false,
+  ): Promise<NavetteHistorique> {
     const navette = await this.findOne(id);
 
     const colisTrouves = await this.colisRepo.find({ where: { id: In(dto.colisIds) } });
@@ -65,7 +75,7 @@ export class NavettesService {
     navette.sentAt = new Date();
     await this.repo.save(navette);
 
-    return this.historiqueRepo.save(
+    const historique = await this.historiqueRepo.save(
       this.historiqueRepo.create({
         navetteId: navette.id,
         nom: navette.nom,
@@ -78,12 +88,22 @@ export class NavettesService {
         conducteurId: navette.conducteurId,
       }),
     );
+
+    if (!isSync) {
+      void this.sync.notifyNavetteStatut(navette);
+    }
+
+    return historique;
   }
 
-  async marquerArrivee(id: string): Promise<Navette> {
+  async marquerArrivee(id: string, isSync = false): Promise<Navette> {
     const navette = await this.findOne(id);
     navette.statut = 'arrivee';
-    return this.repo.save(navette);
+    const saved = await this.repo.save(navette);
+    if (!isSync) {
+      void this.sync.notifyNavetteStatut(saved);
+    }
+    return saved;
   }
 
   async historique(navetteId: string): Promise<NavetteHistorique[]> {

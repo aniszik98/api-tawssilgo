@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -14,6 +15,7 @@ import { CreateLivreurDto } from './dto/create-livreur.dto';
 import { UpdateLivreurDto } from './dto/update-livreur.dto';
 import { ValiderLivreurDto } from './dto/valider-livreur.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { isSyncSource } from '../../common/utils/is-sync-source';
 
 @ApiTags('Livreurs')
 @ApiSecurity('api-key')
@@ -42,8 +44,12 @@ export class LivreursController {
   }
 
   @Post(':id/validation')
-  valider(@Param('id') id: string, @Body() dto: ValiderLivreurDto) {
-    return this.service.valider(id, dto);
+  valider(
+    @Param('id') id: string,
+    @Body() dto: ValiderLivreurDto,
+    @Headers('x-sync-source') syncSource?: string,
+  ) {
+    return this.service.valider(id, dto, isSyncSource(syncSource));
   }
 
   @Delete(':id')

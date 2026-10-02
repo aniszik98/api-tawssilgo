@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -13,6 +14,7 @@ import { CreateColisDto } from './dto/create-colis.dto';
 import { UpdateColisDto } from './dto/update-colis.dto';
 import { ChangeStatutColisDto } from './dto/change-statut-colis.dto';
 import { ColisQueryDto } from './dto/colis-query.dto';
+import { isSyncSource } from '../../common/utils/is-sync-source';
 
 @ApiTags('Colis')
 @ApiSecurity('api-key')
@@ -51,7 +53,12 @@ export class ColisController {
   }
 
   @Post(':id/statut')
-  changerStatut(@Param('id') id: string, @Body() dto: ChangeStatutColisDto) {
-    return this.service.changerStatut(id, dto);
+  changerStatut(
+    @Param('id') id: string,
+    @Body() dto: ChangeStatutColisDto,
+    @Headers('x-sync-source') syncSource?: string,
+  ) {
+    const isSync = isSyncSource(syncSource) || dto.force === true;
+    return this.service.changerStatut(id, dto, isSync);
   }
 }

@@ -1,17 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, MoreThan, Repository } from 'typeorm';
 import { Livreur } from './livreur.entity';
 import { CreateLivreurDto } from './dto/create-livreur.dto';
 import { UpdateLivreurDto } from './dto/update-livreur.dto';
 import { ValiderLivreurDto } from './dto/valider-livreur.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { LaravelSyncService } from '../laravel-sync/laravel-sync.service';
+import { parseSince } from '../../common/utils/parse-since';
 
 @Injectable()
 export class LivreursService {
   constructor(
     @InjectRepository(Livreur)
     private readonly repo: Repository<Livreur>,
+    private readonly sync: LaravelSyncService,
   ) {}
 
   create(dto: CreateLivreurDto) {
@@ -20,9 +23,12 @@ export class LivreursService {
   }
 
   async findAll(query: PaginationQueryDto) {
-    const { page, limit, search } = query;
+    const { page, limit, search, updatedSince } = query;
+    const where: any = search ? { nom: ILike(`%${search}%`) } : {};
+    const since = parseSince(updatedSince);
+    if (since) where.updatedAt = MoreThan(since);
     const [data, total] = await this.repo.findAndCount({
-      where: search ? { nom: ILike(`%${search}%`) } : {},
+      where,
       relations: ['partenaire'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
@@ -44,7 +50,11 @@ export class LivreursService {
   }
 
   /** Logique métier : validation ou refus d'un livreur par un partenaire/admin. */
-  async valider(id: string, dto: ValiderLivreurDto): Promise<Livreur> {
+  async valider(
+    id: string,
+    dto: ValiderLivreurDto,
+    isSync = false,
+  ): Promise<Livreur> {
     const livreur = await this.findOne(id);
     if (dto.decision === 'valider') {
       livreur.statut = 'actif';
@@ -58,7 +68,11 @@ export class LivreursService {
     livreur.validePar = dto.validePar;
     livreur.valideRole = dto.valideRole || 'admin';
     livreur.valideLe = new Date();
-    return this.repo.save(livreur);
+    const saved = await this.repo.save(livreur);
+    if (!isSync) {
+      void this.sync.notifyLivreurValidation(saved);
+    }
+    return saved;
   }
 
   async remove(id: string): Promise<void> {

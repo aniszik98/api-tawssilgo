@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, MoreThan, Repository } from 'typeorm';
 import { Client } from './client.entity';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { parseSince } from '../../common/utils/parse-since';
 
 @Injectable()
 export class ClientsService {
@@ -18,11 +19,17 @@ export class ClientsService {
   }
 
   async findAll(query: PaginationQueryDto) {
-    const { page, limit, search } = query;
+    const { page, limit, search, updatedSince } = query;
+    const base: any = {};
+    const since = parseSince(updatedSince);
+    if (since) base.updatedAt = MoreThan(since);
     const [data, total] = await this.repo.findAndCount({
       where: search
-        ? [{ nom: ILike(`%${search}%`) }, { telephone: ILike(`%${search}%`) }]
-        : {},
+        ? [
+            { ...base, nom: ILike(`%${search}%`) },
+            { ...base, telephone: ILike(`%${search}%`) },
+          ]
+        : base,
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,

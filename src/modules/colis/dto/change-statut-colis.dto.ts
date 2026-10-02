@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ColisStatut } from '../colis.entity';
 
 export class ChangeStatutColisDto {
@@ -30,4 +30,12 @@ export class ChangeStatutColisDto {
   @IsOptional()
   @IsString()
   role?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Forcer la transition sans validation métier (usage synchronisation Laravel)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }
