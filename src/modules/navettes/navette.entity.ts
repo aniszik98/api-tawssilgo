@@ -14,6 +14,9 @@ export class Navette {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ name: 'external_id', nullable: true, unique: true })
+  externalId: string;
+
   @Column()
   nom: string;
 

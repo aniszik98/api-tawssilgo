@@ -2,6 +2,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateClientDto {
+  @ApiPropertyOptional({ description: 'Identifiant dans le système source (Laravel)' })
+  @IsOptional()
+  @IsString()
+  externalId?: string;
+
   @ApiProperty()
   @IsString()
   nom: string;

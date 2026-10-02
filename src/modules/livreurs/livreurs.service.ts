@@ -17,8 +17,18 @@ export class LivreursService {
     private readonly sync: LaravelSyncService,
   ) {}
 
-  create(dto: CreateLivreurDto) {
-    const livreur = this.repo.create({ ...dto, statut: 'en_attente_validation' });
+  async create(dto: CreateLivreurDto, isSync = false) {
+    if (isSync && dto.externalId) {
+      const existing = await this.repo.findOne({ where: { externalId: dto.externalId } });
+      if (existing) {
+        const { statut, ...rest } = dto;
+        Object.assign(existing, rest);
+        if (statut) existing.statut = statut;
+        return this.repo.save(existing);
+      }
+    }
+    const statut = isSync && dto.statut ? dto.statut : 'en_attente_validation';
+    const livreur = this.repo.create({ ...dto, statut });
     return this.repo.save(livreur);
   }
 

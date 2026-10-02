@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -13,6 +14,7 @@ import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { isSyncSource } from '../../common/utils/is-sync-source';
 
 @ApiTags('Clients')
 @ApiSecurity('api-key')
@@ -21,8 +23,11 @@ export class ClientsController {
   constructor(private readonly service: ClientsService) {}
 
   @Post()
-  create(@Body() dto: CreateClientDto) {
-    return this.service.create(dto);
+  create(
+    @Body() dto: CreateClientDto,
+    @Headers('x-sync-source') syncSource?: string,
+  ) {
+    return this.service.create(dto, isSyncSource(syncSource));
   }
 
   @Get()

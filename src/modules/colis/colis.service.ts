@@ -47,19 +47,35 @@ export class ColisService {
     private readonly sync: LaravelSyncService,
   ) {}
 
-  async create(dto: CreateColisDto): Promise<Colis> {
+  async create(dto: CreateColisDto, isSync = false): Promise<Colis> {
+    if (isSync) {
+      const existing =
+        (dto.externalId
+          ? await this.colisRepo.findOne({ where: { externalId: dto.externalId } })
+          : null) ||
+        (dto.codeSuivi
+          ? await this.colisRepo.findOne({ where: { codeSuivi: dto.codeSuivi } })
+          : null);
+      if (existing) {
+        const { statut, ...rest } = dto;
+        Object.assign(existing, rest);
+        if (statut) existing.statut = statut;
+        return this.colisRepo.save(existing);
+      }
+    }
+
     const codeSuivi = dto.codeSuivi || this.genererCodeSuivi();
     const colis = this.colisRepo.create({
       ...dto,
       codeSuivi,
-      statut: ColisStatut.EN_ATTENTE,
+      statut: isSync && dto.statut ? dto.statut : ColisStatut.EN_ATTENTE,
     });
     const saved = await this.colisRepo.save(colis);
 
     await this.historiqueRepo.save(
       this.historiqueRepo.create({
         colisId: saved.id,
-        nouveauStatut: ColisStatut.EN_ATTENTE,
+        nouveauStatut: saved.statut,
         commentaire: 'Création du colis',
         evenement: 'creation',
       }),

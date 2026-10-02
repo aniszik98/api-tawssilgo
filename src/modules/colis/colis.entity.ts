@@ -29,6 +29,9 @@ export class Colis {
   @Column({ name: 'code_suivi', unique: true, nullable: true })
   codeSuivi: string;
 
+  @Column({ name: 'external_id', nullable: true, unique: true })
+  externalId: string;
+
   @Column({ nullable: true })
   description: string;
 

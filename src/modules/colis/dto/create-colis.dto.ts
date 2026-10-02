@@ -1,11 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { ColisStatut } from '../colis.entity';
 
 export class CreateColisDto {
   @ApiPropertyOptional({ description: 'Généré automatiquement si non fourni' })
   @IsOptional()
   @IsString()
   codeSuivi?: string;
+
+  @ApiPropertyOptional({ description: 'Identifiant dans le système source (Laravel)' })
+  @IsOptional()
+  @IsString()
+  externalId?: string;
+
+  @ApiPropertyOptional({
+    enum: ColisStatut,
+    description: 'Utilisé uniquement en mode synchronisation',
+  })
+  @IsOptional()
+  @IsEnum(ColisStatut)
+  statut?: ColisStatut;
 
   @ApiPropertyOptional()
   @IsOptional()

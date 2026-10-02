@@ -24,8 +24,11 @@ export class LivreursController {
   constructor(private readonly service: LivreursService) {}
 
   @Post()
-  create(@Body() dto: CreateLivreurDto) {
-    return this.service.create(dto);
+  create(
+    @Body() dto: CreateLivreurDto,
+    @Headers('x-sync-source') syncSource?: string,
+  ) {
+    return this.service.create(dto, isSyncSource(syncSource));
   }
 
   @Get()

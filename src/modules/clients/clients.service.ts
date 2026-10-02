@@ -14,7 +14,14 @@ export class ClientsService {
     private readonly repo: Repository<Client>,
   ) {}
 
-  create(dto: CreateClientDto) {
+  async create(dto: CreateClientDto, isSync = false) {
+    if (isSync && dto.externalId) {
+      const existing = await this.repo.findOne({ where: { externalId: dto.externalId } });
+      if (existing) {
+        Object.assign(existing, dto);
+        return this.repo.save(existing);
+      }
+    }
     return this.repo.save(this.repo.create(dto));
   }
 

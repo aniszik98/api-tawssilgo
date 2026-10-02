@@ -23,8 +23,11 @@ export class ColisController {
   constructor(private readonly service: ColisService) {}
 
   @Post()
-  create(@Body() dto: CreateColisDto) {
-    return this.service.create(dto);
+  create(
+    @Body() dto: CreateColisDto,
+    @Headers('x-sync-source') syncSource?: string,
+  ) {
+    return this.service.create(dto, isSyncSource(syncSource));
   }
 
   @Get()

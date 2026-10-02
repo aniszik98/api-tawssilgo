@@ -2,6 +2,16 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateLivreurDto {
+  @ApiPropertyOptional({ description: 'Identifiant dans le système source (Laravel)' })
+  @IsOptional()
+  @IsString()
+  externalId?: string;
+
+  @ApiPropertyOptional({ description: 'Utilisé uniquement en mode synchronisation' })
+  @IsOptional()
+  @IsString()
+  statut?: string;
+
   @ApiProperty()
   @IsString()
   nom: string;

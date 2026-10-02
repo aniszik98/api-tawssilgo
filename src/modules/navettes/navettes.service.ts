@@ -22,8 +22,21 @@ export class NavettesService {
     private readonly sync: LaravelSyncService,
   ) {}
 
-  create(dto: CreateNavetteDto) {
-    return this.repo.save(this.repo.create(dto));
+  async create(dto: CreateNavetteDto, isSync = false) {
+    if (isSync && dto.externalId) {
+      const existing = await this.repo.findOne({ where: { externalId: dto.externalId } });
+      if (existing) {
+        const { statut, ...rest } = dto;
+        Object.assign(existing, rest);
+        if (statut) existing.statut = statut;
+        return this.repo.save(existing);
+      }
+    }
+    const navette = this.repo.create({
+      ...dto,
+      statut: isSync && dto.statut ? dto.statut : 'actif',
+    });
+    return this.repo.save(navette);
   }
 
   async findAll(query: NavetteQueryDto) {

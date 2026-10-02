@@ -21,8 +21,11 @@ export class NavettesController {
   constructor(private readonly service: NavettesService) {}
 
   @Post()
-  create(@Body() dto: CreateNavetteDto) {
-    return this.service.create(dto);
+  create(
+    @Body() dto: CreateNavetteDto,
+    @Headers('x-sync-source') syncSource?: string,
+  ) {
+    return this.service.create(dto, isSyncSource(syncSource));
   }
 
   @Get()
