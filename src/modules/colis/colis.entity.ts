@@ -117,6 +117,27 @@ export class Colis {
   @Column({ name: 'livraison_gratuite', default: false })
   livraisonGratuite: boolean;
 
+  @Column({ name: 'livraison_grille', type: 'int', nullable: true })
+  livraisonGrille: number;
+
+  @Column({ name: 'etape_livraison', nullable: true })
+  etapeLivraison: string;
+
+  @Column({ name: 'etape_paiement', nullable: true })
+  etapePaiement: string;
+
+  @Column({ name: 'etape_retour', nullable: true })
+  etapeRetour: string;
+
+  @Column({ name: 'phase_echange', nullable: true })
+  phaseEchange: string;
+
+  @Column({ name: 'client_paye_at', type: 'timestamptz', nullable: true })
+  clientPayeAt: Date;
+
+  @Column({ name: 'ticket_imprime_at', type: 'timestamptz', nullable: true })
+  ticketImprimeAt: Date;
+
   @Column({ default: ColisStatut.EN_ATTENTE })
   statut: string;
 

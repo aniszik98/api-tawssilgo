@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEmail, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateClientDto {
   @ApiPropertyOptional({ description: 'Identifiant dans le système source (Laravel)' })
@@ -35,4 +35,9 @@ export class CreateClientDto {
   @IsOptional()
   @IsUUID()
   partenaireId?: string;
+
+  @ApiPropertyOptional({ description: 'Utilisé uniquement en mode synchronisation' })
+  @IsOptional()
+  @IsNumber()
+  solde?: number;
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateLivreurDto {
   @ApiPropertyOptional({ description: 'Identifiant dans le système source (Laravel)' })
@@ -40,4 +40,14 @@ export class CreateLivreurDto {
   @IsOptional()
   @IsString()
   carteGrisePhotoUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Utilisé uniquement en mode synchronisation' })
+  @IsOptional()
+  @IsNumber()
+  solde?: number;
+
+  @ApiPropertyOptional({ description: 'Utilisé uniquement en mode synchronisation' })
+  @IsOptional()
+  @IsBoolean()
+  actif?: boolean;
 }

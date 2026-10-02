@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateNavetteDto {
   @ApiPropertyOptional({ description: 'Identifiant dans le système source (Laravel)' })
@@ -38,4 +45,14 @@ export class CreateNavetteDto {
   @IsOptional()
   @IsUUID()
   conducteurId?: string;
+
+  @ApiPropertyOptional({ description: 'Utilisé uniquement en mode synchronisation' })
+  @IsOptional()
+  @IsDateString()
+  departAt?: string;
+
+  @ApiPropertyOptional({ description: 'Utilisé uniquement en mode synchronisation' })
+  @IsOptional()
+  @IsDateString()
+  sentAt?: string;
 }
