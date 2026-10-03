@@ -15,6 +15,13 @@ import { ColisQueryDto } from './dto/colis-query.dto';
 import { LaravelSyncService } from '../laravel-sync/laravel-sync.service';
 import { parseSince } from '../../common/utils/parse-since';
 
+// Un push Laravel envoie comme « codeSuivi » l'identifiant (UUID) de la
+// livraison dans le système source. Cet id sert de clé de réconciliation avec
+// le pull (voir ColisService.create).
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const estUuid = (v?: string | null): v is string => !!v && UUID_RE.test(v);
+
 // Transitions de statut autorisées. Toute autre transition est rejetée,
 // pour éviter des incohérences métier (ex: repasser "livrée" à "en_attente").
 const TRANSITIONS_AUTORISEES: Record<string, string[]> = {
@@ -48,6 +55,12 @@ export class ColisService {
   ) {}
 
   async create(dto: CreateColisDto, isSync = false): Promise<Colis> {
+    // Le pull upsert les colis sur `id` (= id de la livraison Laravel). Quand un
+    // push Laravel arrive avec codeSuivi = id de la livraison, on ancre l'id du
+    // colis sur cette valeur : le pull mettra alors à jour la même ligne au lieu
+    // d'en insérer une seconde (dédoublonnage push/pull).
+    const idAncre = isSync && estUuid(dto.codeSuivi) ? dto.codeSuivi : undefined;
+
     if (isSync) {
       const existing =
         (dto.externalId
@@ -55,10 +68,17 @@ export class ColisService {
           : null) ||
         (dto.codeSuivi
           ? await this.colisRepo.findOne({ where: { codeSuivi: dto.codeSuivi } })
+          : null) ||
+        (idAncre
+          ? await this.colisRepo.findOne({ where: { id: idAncre } })
           : null);
       if (existing) {
+        // codeSuivi reste géré par le pull (libellé Laravel) : on ne l'écrase
+        // pas ici avec l'identifiant brut reçu du push.
+        const codeSuiviCanonique = existing.codeSuivi;
         const { statut, ...rest } = dto;
         Object.assign(existing, rest);
+        existing.codeSuivi = codeSuiviCanonique;
         if (statut) existing.statut = statut;
         return this.colisRepo.save(existing);
       }
@@ -67,6 +87,7 @@ export class ColisService {
     const codeSuivi = dto.codeSuivi || this.genererCodeSuivi();
     const colis = this.colisRepo.create({
       ...dto,
+      id: idAncre,
       codeSuivi,
       statut: isSync && dto.statut ? dto.statut : ColisStatut.EN_ATTENTE,
     });
