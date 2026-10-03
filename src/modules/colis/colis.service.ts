@@ -56,12 +56,15 @@ export class ColisService {
 
   async create(dto: CreateColisDto, isSync = false): Promise<Colis> {
     // Le pull upsert les colis sur `id` (= id de la livraison Laravel). Quand un
-    // push Laravel arrive avec codeSuivi = id de la livraison, on ancre l'id du
+    // push arrive avec codeSuivi = UUID de la livraison source, on ancre l'id du
     // colis sur cette valeur : le pull mettra alors à jour la même ligne au lieu
     // d'en insérer une seconde (dédoublonnage push/pull).
-    const idAncre = isSync && estUuid(dto.codeSuivi) ? dto.codeSuivi : undefined;
+    // NB: on ne dépend PAS de l'en-tête x-sync-source, que le push colis
+    // Laravel n'envoie pas toujours (les apps, elles, génèrent des « COL-… »).
+    const idAncre = estUuid(dto.codeSuivi) ? dto.codeSuivi : undefined;
+    const estPushSource = isSync || !!idAncre;
 
-    if (isSync) {
+    if (estPushSource) {
       const existing =
         (dto.externalId
           ? await this.colisRepo.findOne({ where: { externalId: dto.externalId } })
