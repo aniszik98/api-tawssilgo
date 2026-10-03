@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, MoreThan, Repository } from 'typeorm';
 import { Client } from './client.entity';
@@ -9,12 +9,35 @@ import { parseSince } from '../../common/utils/parse-since';
 
 @Injectable()
 export class ClientsService {
+  private readonly logger = new Logger(ClientsService.name);
+
   constructor(
     @InjectRepository(Client)
     private readonly repo: Repository<Client>,
   ) {}
 
+  // Le système source (Laravel) pousse le destinataire de chaque colis comme
+  // une fiche "client" (nom + téléphone uniquement, sans external_id ni
+  // boutique/partenaire/solde). On l'ignore pour ne conserver que les
+  // expéditeurs dans `clients`. Désactivable via BLOCK_RECIPIENT_CLIENTS=false.
+  private isRecipientPush(dto: CreateClientDto): boolean {
+    return (
+      !dto.externalId &&
+      !dto.boutique &&
+      !dto.partenaireId &&
+      !dto.email &&
+      (dto.solde === undefined || dto.solde === null)
+    );
+  }
+
   async create(dto: CreateClientDto, isSync = false) {
+    if (this.isRecipientPush(dto) && process.env.BLOCK_RECIPIENT_CLIENTS !== 'false') {
+      this.logger.warn(
+        `Fiche destinataire ignorée (aucun expéditeur enregistré) : "${dto.nom}" ${dto.telephone || ''}`,
+      );
+      return { skipped: true, raison: 'destinataire' };
+    }
+
     if (isSync && dto.externalId) {
       const existing = await this.repo.findOne({ where: { externalId: dto.externalId } });
       if (existing) {
