@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -52,6 +53,8 @@ const TIMESTAMP_PAR_STATUT: Partial<Record<string, keyof Colis>> = {
 
 @Injectable()
 export class ColisService {
+  private readonly logger = new Logger(ColisService.name);
+
   constructor(
     @InjectRepository(Colis)
     private readonly colisRepo: Repository<Colis>,
@@ -167,26 +170,28 @@ export class ColisService {
     const colis = await this.findOne(id);
     const ancienStatut = colis.statut;
 
-    // 1) Détermine les 2 axes cibles. Priorité : axes explicites > statut brut
-    //    Laravel lu dans le commentaire > statut reçu.
+    // 1) Détermine les 2 axes cibles. Priorité : axes explicites (nos apps) >
+    //    statut brut Laravel lu dans le commentaire > statut reçu.
     let lv: string | null = colis.etapeLivraison || null;
     let pay: string | null = colis.etapePaiement || null;
 
-    const statutLaravel = extraireStatutLaravel(dto.commentaire);
-    if (statutLaravel && STATUT_LARAVEL_VERS_LIVRAISON[statutLaravel]) {
-      lv = STATUT_LARAVEL_VERS_LIVRAISON[statutLaravel];
-    } else if (statutLaravel && STATUT_LARAVEL_VERS_PAIEMENT[statutLaravel]) {
-      pay = STATUT_LARAVEL_VERS_PAIEMENT[statutLaravel];
-    } else if (dto.etapeLivraison || dto.etapePaiement) {
+    if (dto.etapeLivraison || dto.etapePaiement) {
       if (dto.etapeLivraison) lv = dto.etapeLivraison;
       if (dto.etapePaiement) pay = dto.etapePaiement;
-    } else if (dto.statut) {
-      if (STATUT_LARAVEL_VERS_LIVRAISON[dto.statut]) {
-        lv = STATUT_LARAVEL_VERS_LIVRAISON[dto.statut];
-      } else if (STATUT_LARAVEL_VERS_PAIEMENT[dto.statut]) {
-        pay = STATUT_LARAVEL_VERS_PAIEMENT[dto.statut];
-      } else {
-        lv = dto.statut;
+    } else {
+      // Le commentaire « Statut mis à jour vers X » porte le vrai statut Laravel
+      // ; sinon on retombe sur le champ `statut` (consolidé ou brut).
+      const token = extraireStatutLaravel(dto.commentaire) || dto.statut || null;
+      if (token && STATUT_LARAVEL_VERS_LIVRAISON[token]) {
+        lv = STATUT_LARAVEL_VERS_LIVRAISON[token];
+      } else if (token && STATUT_LARAVEL_VERS_PAIEMENT[token]) {
+        pay = STATUT_LARAVEL_VERS_PAIEMENT[token];
+      } else if (token) {
+        // Jeton inconnu (nouveau statut côté Laravel ?) : on ne corrompt pas les
+        // axes, on garde l'état actuel et on trace pour compléter le mapping.
+        this.logger.warn(
+          `Statut inconnu ignoré (axes inchangés) : colis=${id} token="${token}"`,
+        );
       }
     }
 
