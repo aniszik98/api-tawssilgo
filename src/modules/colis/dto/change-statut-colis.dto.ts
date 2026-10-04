@@ -1,11 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
-import { ColisStatut } from '../colis.entity';
+import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class ChangeStatutColisDto {
-  @ApiProperty({ enum: ColisStatut })
-  @IsEnum(ColisStatut)
-  statut: ColisStatut;
+  // Statut consolidé OU statut brut de l'intégration Laravel (ex:
+  // 'prise_en_charge_livraison', 'en_transit'). L'API dérive les 2 axes
+  // (etape_livraison / etape_paiement) puis recalcule `statut`.
+  @ApiPropertyOptional({
+    description: 'Statut consolidé ou statut brut Laravel',
+  })
+  @IsOptional()
+  @IsString()
+  statut?: string;
+
+  @ApiPropertyOptional({ description: 'Axe livraison (prioritaire si fourni)' })
+  @IsOptional()
+  @IsString()
+  etapeLivraison?: string;
+
+  @ApiPropertyOptional({ description: 'Axe paiement (prioritaire si fourni)' })
+  @IsOptional()
+  @IsString()
+  etapePaiement?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

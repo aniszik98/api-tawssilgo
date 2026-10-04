@@ -14,6 +14,12 @@ import { ChangeStatutColisDto } from './dto/change-statut-colis.dto';
 import { ColisQueryDto } from './dto/colis-query.dto';
 import { LaravelSyncService } from '../laravel-sync/laravel-sync.service';
 import { parseSince } from '../../common/utils/parse-since';
+import {
+  deriveStatut,
+  extraireStatutLaravel,
+  STATUT_LARAVEL_VERS_LIVRAISON,
+  STATUT_LARAVEL_VERS_PAIEMENT,
+} from './statut-axes';
 
 // Un push Laravel envoie comme « codeSuivi » l'identifiant (UUID) de la
 // livraison dans le système source. Cet id sert de clé de réconciliation avec
@@ -148,8 +154,10 @@ export class ColisService {
 
   /**
    * Cœur de la logique métier : fait transitionner un colis d'un statut à un
-   * autre, en validant la transition, en timestampant l'étape, et en gardant
-   * une trace complète dans colis_historique.
+   * autre. Les 2 axes (etape_livraison / etape_paiement) sont la source de
+   * vérité ; `statut` en est DÉRIVÉ. L'intégration Laravel envoie un statut
+   * grossier + le vrai statut dans le commentaire : on reconstruit les axes
+   * depuis ce libellé (voir statut-axes.ts).
    */
   async changerStatut(
     id: string,
@@ -157,27 +165,60 @@ export class ColisService {
     isSync = false,
   ): Promise<Colis> {
     const colis = await this.findOne(id);
-    const transitionsPossibles = TRANSITIONS_AUTORISEES[colis.statut] || [];
+    const ancienStatut = colis.statut;
 
-    if (!isSync && !transitionsPossibles.includes(dto.statut)) {
+    // 1) Détermine les 2 axes cibles. Priorité : axes explicites > statut brut
+    //    Laravel lu dans le commentaire > statut reçu.
+    let lv: string | null = colis.etapeLivraison || null;
+    let pay: string | null = colis.etapePaiement || null;
+
+    const statutLaravel = extraireStatutLaravel(dto.commentaire);
+    if (statutLaravel && STATUT_LARAVEL_VERS_LIVRAISON[statutLaravel]) {
+      lv = STATUT_LARAVEL_VERS_LIVRAISON[statutLaravel];
+    } else if (statutLaravel && STATUT_LARAVEL_VERS_PAIEMENT[statutLaravel]) {
+      pay = STATUT_LARAVEL_VERS_PAIEMENT[statutLaravel];
+    } else if (dto.etapeLivraison || dto.etapePaiement) {
+      if (dto.etapeLivraison) lv = dto.etapeLivraison;
+      if (dto.etapePaiement) pay = dto.etapePaiement;
+    } else if (dto.statut) {
+      if (STATUT_LARAVEL_VERS_LIVRAISON[dto.statut]) {
+        lv = STATUT_LARAVEL_VERS_LIVRAISON[dto.statut];
+      } else if (STATUT_LARAVEL_VERS_PAIEMENT[dto.statut]) {
+        pay = STATUT_LARAVEL_VERS_PAIEMENT[dto.statut];
+      } else {
+        lv = dto.statut;
+      }
+    }
+
+    lv = lv || 'en_attente';
+    pay = pay || 'ouv';
+    const nouveauStatut = deriveStatut(lv, pay);
+
+    // 2) Validation métier de la transition (sauf synchronisation/force).
+    const transitionsPossibles = TRANSITIONS_AUTORISEES[ancienStatut] || [];
+    if (!isSync && !transitionsPossibles.includes(nouveauStatut)) {
       throw new BadRequestException(
-        `Transition invalide : ${colis.statut} → ${dto.statut}. Transitions possibles : ${transitionsPossibles.join(', ') || 'aucune'}`,
+        `Transition invalide : ${ancienStatut} → ${nouveauStatut}. Transitions possibles : ${transitionsPossibles.join(', ') || 'aucune'}`,
       );
     }
 
-    if (!isSync && dto.statut === ColisStatut.RETOUR && !dto.retourMotif) {
-      throw new BadRequestException('Le motif de retour est obligatoire pour ce statut');
+    if (!isSync && nouveauStatut === ColisStatut.RETOUR && !dto.retourMotif) {
+      throw new BadRequestException(
+        'Le motif de retour est obligatoire pour ce statut',
+      );
     }
 
-    const ancienStatut = colis.statut;
-    colis.statut = dto.statut;
+    // 3) Écrit les 2 axes puis le statut dérivé.
+    colis.etapeLivraison = lv;
+    colis.etapePaiement = pay;
+    colis.statut = nouveauStatut;
 
-    const champTimestamp = TIMESTAMP_PAR_STATUT[dto.statut];
+    const champTimestamp = TIMESTAMP_PAR_STATUT[nouveauStatut];
     if (champTimestamp) {
       (colis as any)[champTimestamp] = new Date();
     }
 
-    if (dto.statut === ColisStatut.RETOUR) {
+    if (nouveauStatut === ColisStatut.RETOUR) {
       colis.retourMotif = dto.retourMotif || '';
       colis.retourAt = new Date();
       colis.retourTentatives = (colis.retourTentatives || 0) + 1;
@@ -196,7 +237,7 @@ export class ColisService {
         nom: dto.nom,
         livreurId: dto.livreurId,
         ancienStatut,
-        nouveauStatut: dto.statut,
+        nouveauStatut,
         commentaire: dto.commentaire || '',
       }),
     );
