@@ -97,11 +97,21 @@ export class ColisService {
     }
 
     const codeSuivi = dto.codeSuivi || this.genererCodeSuivi();
+    // Les 2 axes sont la source de vérité : on les initialise toujours. Sans
+    // cela un colis créé par push Laravel restait à NULL, et la règle de
+    // protection du pull le figeait ensuite pour toujours (local ≠ external).
+    const etapeLivraison = dto.etapeLivraison || 'en_attente';
+    const etapePaiement = dto.etapePaiement || 'ouv';
     const colis = this.colisRepo.create({
       ...dto,
       id: idAncre,
       codeSuivi,
-      statut: isSync && dto.statut ? dto.statut : ColisStatut.EN_ATTENTE,
+      etapeLivraison,
+      etapePaiement,
+      statut:
+        isSync && dto.statut
+          ? dto.statut
+          : dto.statut || deriveStatut(etapeLivraison, etapePaiement),
     });
     const saved = await this.colisRepo.save(colis);
 

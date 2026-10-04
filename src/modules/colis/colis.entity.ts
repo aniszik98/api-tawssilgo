@@ -129,6 +129,17 @@ export class Colis {
   @Column({ name: 'etape_retour', nullable: true })
   etapeRetour: string;
 
+  // Champs « riches » de l'ancienne app (API Laravel /livraisons), remontés par
+  // le pull riche (tawssilgo_pull_riche).
+  @Column({ name: 'code_pin', nullable: true })
+  codePin: string;
+
+  @Column({ name: 'date_ramassage', type: 'timestamptz', nullable: true })
+  dateRamassage: Date;
+
+  @Column({ name: 'ecotrack_id', nullable: true })
+  ecotrackId: string;
+
   @Column({ name: 'phase_echange', nullable: true })
   phaseEchange: string;
 
