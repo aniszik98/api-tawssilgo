@@ -137,9 +137,6 @@ export class Colis {
   @Column({ name: 'date_ramassage', type: 'timestamptz', nullable: true })
   dateRamassage: Date;
 
-  @Column({ name: 'ecotrack_id', nullable: true })
-  ecotrackId: string;
-
   @Column({ name: 'phase_echange', nullable: true })
   phaseEchange: string;
 
