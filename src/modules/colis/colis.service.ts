@@ -35,7 +35,7 @@ const estUuid = (v?: string | null): v is string => !!v && UUID_RE.test(v);
 // label COLIS-… définitif.
 const ECO_TRACK_RE = /^ECVNAC[A-Z0-9]+$/i;
 const estCodeSuiviBrut = (v?: string | null): boolean =>
-  !!v && (estUuid(v) || ECO_TRACK_RE.test(v.trim()));
+  !!v && (UUID_RE.test(v) || ECO_TRACK_RE.test(v.trim()));
 
 // Transitions de statut autorisées. Toute autre transition est rejetée,
 // pour éviter des incohérences métier (ex: repasser "livrée" à "en_attente").
