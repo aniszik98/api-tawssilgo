@@ -29,6 +29,14 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const estUuid = (v?: string | null): v is string => !!v && UUID_RE.test(v);
 
+// Certains pushes Laravel envoient aussi le numéro de suivi transporteur EcoTrack
+// (ECVNAC…) comme « codeSuivi ». Ce n'est pas un code de suivi affichable et cela
+// déborde dans les apps : on le refuse à la création, le pull posera le vrai
+// label COLIS-… définitif.
+const ECO_TRACK_RE = /^ECVNAC[A-Z0-9]+$/i;
+const estCodeSuiviBrut = (v?: string | null): boolean =>
+  !!v && (estUuid(v) || ECO_TRACK_RE.test(v.trim()));
+
 // Transitions de statut autorisées. Toute autre transition est rejetée,
 // pour éviter des incohérences métier (ex: repasser "livrée" à "en_attente").
 const TRANSITIONS_AUTORISEES: Record<string, string[]> = {
@@ -96,7 +104,13 @@ export class ColisService {
       }
     }
 
-    const codeSuivi = dto.codeSuivi || this.genererCodeSuivi();
+    // Le code de suivi affiché ne doit jamais être un identifiant brut du push
+    // (UUID source ou numéro EcoTrack) : on génère un code « COL-… » à la place,
+    // que le pull remplacera par le label COLIS-… définitif de Laravel.
+    const codeSuivi =
+      dto.codeSuivi && !estCodeSuiviBrut(dto.codeSuivi)
+        ? dto.codeSuivi
+        : this.genererCodeSuivi();
     // Les 2 axes sont la source de vérité : on les initialise toujours. Sans
     // cela un colis créé par push Laravel restait à NULL, et la règle de
     // protection du pull le figeait ensuite pour toujours (local ≠ external).
